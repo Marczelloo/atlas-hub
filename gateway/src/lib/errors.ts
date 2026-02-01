@@ -13,12 +13,15 @@ export class AppError extends Error {
   }
 
   toJSON() {
-    return {
+    const result: Record<string, unknown> = {
       error: this.error,
       message: this.message,
       statusCode: this.statusCode,
-      ...(this.details && { details: this.details }),
     };
+    if (this.details) {
+      result.details = this.details;
+    }
+    return result;
   }
 }
 

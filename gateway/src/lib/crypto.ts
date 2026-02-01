@@ -9,7 +9,6 @@ import { config } from '../config/env.js';
 
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
-const AUTH_TAG_LENGTH = 16;
 
 function getMasterKeyBuffer(): Buffer {
   // Master key should be 32 bytes (256 bits) for AES-256

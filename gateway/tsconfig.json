@@ -19,8 +19,8 @@
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@atlashub/shared": ["../packages/shared/src/index.ts"],
-      "@atlashub/shared/*": ["../packages/shared/src/*"]
+      "@atlashub/shared": ["../packages/shared/dist/index.d.ts"],
+      "@atlashub/shared/*": ["../packages/shared/dist/*"]
     }
   },
   "include": ["src/**/*"],

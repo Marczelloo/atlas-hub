@@ -84,7 +84,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) =
   });
 
   // Logout
-  fastify.post('/logout', async (request, reply) => {
+  fastify.post('/logout', async (_request, reply) => {
     reply.clearCookie(COOKIE_NAME, { path: '/' });
     return reply.send({ data: { success: true } });
   });
@@ -120,7 +120,7 @@ export const authRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) =
   });
 
   // Check if setup is needed (no users yet)
-  fastify.get('/setup-status', async (request, reply) => {
+  fastify.get('/setup-status', async (_request, reply) => {
     const hasUsers = await authService.hasAnyUser();
     return reply.send({
       data: {

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth';
@@ -17,7 +17,7 @@ import {
 } from '@/components/ui/card';
 import { AlertCircle, Loader2, Database } from 'lucide-react';
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { register, isAuthenticated, isLoading: authLoading } = useAuth();
@@ -193,5 +193,19 @@ export default function RegisterPage() {
         </form>
       </Card>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-zinc-950">
+          <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
+        </div>
+      }
+    >
+      <RegisterForm />
+    </Suspense>
   );
 }

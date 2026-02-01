@@ -63,11 +63,7 @@ export async function buildApp() {
     },
   });
 
-  // Request ID decorator
-  app.decorateRequest('requestId', '');
-  app.addHook('onRequest', async (request) => {
-    request.requestId = request.id;
-  });
+  // Request ID is already available via request.id
 
   // Register routes
   await app.register(healthRoutes, { prefix: '/health' });

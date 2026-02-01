@@ -10,7 +10,7 @@ const createInviteSchema = z.object({
 
 export const inviteRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // List invite keys
-  fastify.get('/', async (request, reply) => {
+  fastify.get('/', async (_request, reply) => {
     const invites = await authService.listInviteKeys();
     return reply.send({ data: invites });
   });

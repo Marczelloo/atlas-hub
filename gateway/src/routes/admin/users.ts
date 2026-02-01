@@ -4,7 +4,7 @@ import { ForbiddenError } from '../../lib/errors.js';
 
 export const usersRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // List users
-  fastify.get('/', async (request, reply) => {
+  fastify.get('/', async (_request, reply) => {
     const users = await authService.listUsers();
     return reply.send({ data: users });
   });
