@@ -22,6 +22,7 @@ async function fetchApi<T>(path: string, options: RequestInit = {}): Promise<T> 
   const response = await fetch(`${GATEWAY_URL}${path}`, {
     ...options,
     headers,
+    credentials: 'include', // Send cookies for auth
   });
 
   if (!response.ok) {
