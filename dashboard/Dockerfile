@@ -1,9 +1,12 @@
 FROM node:20-alpine AS base
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
-# Dependencies + build stage (combined for pnpm workspace)
+# Build stage
 FROM base AS builder
 WORKDIR /app
+
+# Configure pnpm for flat node_modules (required for standalone output)
+RUN echo "node-linker=hoisted" > .npmrc
 
 # Copy workspace config
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -28,7 +31,7 @@ ENV NODE_ENV=production
 RUN pnpm build
 
 # Production image
-FROM base AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -38,11 +41,12 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Note: pnpm workspaces put standalone output in a subfolder matching the package name
+# Copy public files
 COPY --from=builder /app/dashboard/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/standalone/dashboard ./
-COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/standalone/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/static ./.next/static
+
+# Copy standalone output - with hoisted pnpm, structure is simpler
+COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/static ./dashboard/.next/static
 
 USER nextjs
 
@@ -50,5 +54,7 @@ EXPOSE 3001
 
 ENV PORT=3001
 ENV HOSTNAME="0.0.0.0"
+
+WORKDIR /app/dashboard
 
 CMD ["node", "server.js"]

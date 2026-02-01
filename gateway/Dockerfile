@@ -1,9 +1,12 @@
 FROM node:20-alpine AS base
 RUN corepack enable && corepack prepare pnpm@9.15.0 --activate
 
-# Dependencies + build stage (combined for pnpm workspace)
+# Build stage
 FROM base AS builder
 WORKDIR /app
+
+# Configure pnpm for flat node_modules (no symlinks)
+RUN echo "node-linker=hoisted" > .npmrc
 
 # Copy workspace config
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -25,9 +28,12 @@ RUN pnpm build
 WORKDIR /app/gateway
 RUN pnpm build
 
-# Production dependencies
+# Production dependencies stage
 FROM base AS prod-deps
 WORKDIR /app
+
+# Configure pnpm for flat node_modules
+RUN echo "node-linker=hoisted" > .npmrc
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY packages/shared/package.json ./packages/shared/
@@ -36,7 +42,7 @@ COPY gateway/package.json ./gateway/
 RUN pnpm install --frozen-lockfile --prod
 
 # Production image
-FROM base AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
@@ -45,17 +51,16 @@ ENV NODE_ENV=production
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 atlashub
 
-# Copy built code
+# Copy built gateway code
 COPY --from=builder --chown=atlashub:nodejs /app/gateway/dist ./dist
-COPY --from=builder --chown=atlashub:nodejs /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder --chown=atlashub:nodejs /app/packages/shared/package.json ./packages/shared/
-
-# Copy production dependencies
-COPY --from=prod-deps --chown=atlashub:nodejs /app/node_modules ./node_modules
-COPY --from=prod-deps --chown=atlashub:nodejs /app/gateway/node_modules ./gateway/node_modules
-
-# Copy package.json for module resolution
 COPY --from=builder --chown=atlashub:nodejs /app/gateway/package.json ./package.json
+
+# Copy built shared package
+COPY --from=builder --chown=atlashub:nodejs /app/packages/shared/dist ./node_modules/@atlashub/shared/dist
+COPY --from=builder --chown=atlashub:nodejs /app/packages/shared/package.json ./node_modules/@atlashub/shared/package.json
+
+# Copy production dependencies (hoisted - flat structure)
+COPY --from=prod-deps --chown=atlashub:nodejs /app/node_modules ./node_modules
 
 USER atlashub
 
