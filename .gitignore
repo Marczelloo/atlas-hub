@@ -44,9 +44,6 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# pnpm
-pnpm-lock.yaml
-
 # Database data (Docker volumes)
 .pgdata/
 postgres-data/
