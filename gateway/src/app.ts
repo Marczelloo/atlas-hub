@@ -2,10 +2,12 @@ import Fastify from 'fastify';
 import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
+import cookie from '@fastify/cookie';
 import { config } from './config/env.js';
 import { adminRoutes } from './routes/admin/index.js';
 import { publicRoutes } from './routes/public/index.js';
 import { healthRoutes } from './routes/health.js';
+import { authRoutes } from './routes/auth.js';
 import { errorHandler } from './lib/errors.js';
 
 export async function buildApp() {
@@ -35,6 +37,7 @@ export async function buildApp() {
   // CORS for public API
   await app.register(cors, {
     origin: config.corsOrigins,
+    credentials: true, // Allow cookies
     methods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowedHeaders: [
       'Content-Type',
@@ -44,6 +47,9 @@ export async function buildApp() {
       'cf-access-jwt-assertion',
     ],
   });
+
+  // Cookie support
+  await app.register(cookie);
 
   // Rate limiting
   await app.register(rateLimit, {
@@ -65,6 +71,7 @@ export async function buildApp() {
 
   // Register routes
   await app.register(healthRoutes, { prefix: '/health' });
+  await app.register(authRoutes, { prefix: '/auth' });
   await app.register(adminRoutes, { prefix: '/admin' });
   await app.register(publicRoutes, { prefix: '/v1' });
 

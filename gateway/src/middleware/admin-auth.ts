@@ -1,58 +1,78 @@
 import type { FastifyRequest, FastifyReply } from 'fastify';
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { authService, type User } from '../services/auth.js';
 import { config } from '../config/env.js';
-import { UnauthorizedError } from '../lib/errors.js';
+import { UnauthorizedError, ForbiddenError } from '../lib/errors.js';
 
-let jwks: ReturnType<typeof createRemoteJWKSet> | undefined;
+const COOKIE_NAME = 'atlashub_session';
 
-function getJwks() {
-  if (!jwks && config.security.cfAccessEnabled) {
-    const jwksUrl = new URL(
-      '/cdn-cgi/access/certs',
-      `https://${config.security.cfAccessTeamDomain}`
-    );
-    jwks = createRemoteJWKSet(jwksUrl);
-  }
-  return jwks;
-}
-
-async function verifyCloudflareAccessJwt(token: string): Promise<boolean> {
-  const jwksSet = getJwks();
-  if (!jwksSet) {
-    return false;
-  }
-
-  try {
-    await jwtVerify(token, jwksSet, {
-      audience: config.security.cfAccessAudience,
-      issuer: `https://${config.security.cfAccessTeamDomain}`,
-    });
-    return true;
-  } catch {
-    return false;
+declare module 'fastify' {
+  interface FastifyRequest {
+    user?: User;
   }
 }
 
-export async function adminAuthMiddleware(request: FastifyRequest, _reply: FastifyReply) {
-  // Development mode: check for dev admin token
+/**
+ * Middleware that checks for valid session cookie and sets request.user
+ * Allows all authenticated users (both admin and regular users)
+ */
+export async function sessionAuthMiddleware(request: FastifyRequest, _reply: FastifyReply) {
+  // Development fallback: allow dev admin token
   if (config.isDev && config.security.devAdminToken) {
     const devToken = request.headers['x-dev-admin-token'];
     if (devToken === config.security.devAdminToken) {
+      // Create a mock admin user for dev
+      request.user = {
+        id: 'dev-admin',
+        email: 'dev@localhost',
+        role: 'admin',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
       return;
     }
   }
 
-  // Production mode: verify Cloudflare Access JWT
-  if (config.security.cfAccessEnabled) {
-    const cfAuthHeader = request.headers['cf-access-jwt-assertion'];
-    if (typeof cfAuthHeader === 'string') {
-      const isValid = await verifyCloudflareAccessJwt(cfAuthHeader);
-      if (isValid) {
-        return;
-      }
-    }
+  // Get session cookie
+  const token = request.cookies[COOKIE_NAME];
+
+  if (!token) {
+    throw new UnauthorizedError('Authentication required');
   }
 
-  // If neither check passed
-  throw new UnauthorizedError('Invalid or missing admin authentication');
+  try {
+    const payload = await authService.verifyToken(token);
+    const user = await authService.getUserById(payload.userId);
+
+    if (!user) {
+      throw new UnauthorizedError('User not found');
+    }
+
+    request.user = user;
+  } catch (error) {
+    if (error instanceof UnauthorizedError) {
+      throw error;
+    }
+    throw new UnauthorizedError('Invalid or expired session');
+  }
+}
+
+/**
+ * Middleware that requires admin role (must be used after sessionAuthMiddleware)
+ */
+export async function adminOnlyMiddleware(request: FastifyRequest, _reply: FastifyReply) {
+  if (!request.user) {
+    throw new UnauthorizedError('Authentication required');
+  }
+
+  if (request.user.role !== 'admin') {
+    throw new ForbiddenError('Admin access required');
+  }
+}
+
+/**
+ * Combined middleware: session auth + admin role check
+ */
+export async function adminAuthMiddleware(request: FastifyRequest, reply: FastifyReply) {
+  await sessionAuthMiddleware(request, reply);
+  await adminOnlyMiddleware(request, reply);
 }

@@ -44,11 +44,17 @@ const envSchema = z.object({
 
   // Security
   PLATFORM_MASTER_KEY: z.string().min(32), // For encrypting project DB creds (AES-256)
-  DEV_ADMIN_TOKEN: z.string().optional(), // Dev-only fallback
+  JWT_SECRET: z.string().min(32), // For signing JWT tokens
+  SESSION_EXPIRY_HOURS: z.coerce.number().int().min(1).default(24),
 
-  // Cloudflare Access (production)
-  CF_ACCESS_TEAM_DOMAIN: z.string().optional(), // e.g., myteam.cloudflareaccess.com
-  CF_ACCESS_AUDIENCE: z.string().optional(), // aud claim
+  // Initial admin setup (first run only)
+  ADMIN_EMAIL: z.string().email().optional().or(z.literal('')),
+  ADMIN_PASSWORD: z.string().min(8).optional().or(z.literal('')),
+
+  // Legacy - can be removed
+  DEV_ADMIN_TOKEN: z.string().optional(),
+  CF_ACCESS_TEAM_DOMAIN: z.string().optional(),
+  CF_ACCESS_AUDIENCE: z.string().optional(),
 
   // Query limits
   STATEMENT_TIMEOUT_MS: z.coerce.number().int().min(1000).default(5000),
@@ -110,6 +116,10 @@ export const config = {
 
   security: {
     platformMasterKey: env.PLATFORM_MASTER_KEY,
+    jwtSecret: env.JWT_SECRET,
+    sessionExpiryHours: env.SESSION_EXPIRY_HOURS,
+    adminEmail: env.ADMIN_EMAIL || undefined,
+    adminPassword: env.ADMIN_PASSWORD || undefined,
     devAdminToken: env.DEV_ADMIN_TOKEN,
     cfAccessTeamDomain: env.CF_ACCESS_TEAM_DOMAIN,
     cfAccessAudience: env.CF_ACCESS_AUDIENCE,

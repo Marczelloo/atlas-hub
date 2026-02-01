@@ -53,7 +53,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      PORT: 3000
+      PORT: ${PORT:-4545}
       HOST: 0.0.0.0
       LOG_LEVEL: ${LOG_LEVEL:-info}
       CORS_ORIGINS: ${CORS_ORIGINS:-*}
@@ -70,13 +70,15 @@ services:
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
       MINIO_REGION: ${MINIO_REGION:-us-east-1}
       PLATFORM_MASTER_KEY: ${PLATFORM_MASTER_KEY:?PLATFORM_MASTER_KEY is required}
-      DEV_ADMIN_TOKEN: ${DEV_ADMIN_TOKEN:-}
-      CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:-}
-      CF_ACCESS_AUDIENCE: ${CF_ACCESS_AUDIENCE:-}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required}
+      SESSION_EXPIRY_HOURS: ${SESSION_EXPIRY_HOURS:-24}
       RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
       RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
       STATEMENT_TIMEOUT_MS: ${STATEMENT_TIMEOUT_MS:-5000}
       MAX_ROWS_PER_QUERY: ${MAX_ROWS_PER_QUERY:-1000}
+      PRESIGNED_URL_EXPIRY_SECONDS: ${PRESIGNED_URL_EXPIRY_SECONDS:-3600}
+    ports:
+      - '${PORT:-4545}:${PORT:-4545}'
     depends_on:
       postgres:
         condition: service_healthy
@@ -95,28 +97,14 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: ${NODE_ENV:-production}
-      NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-http://gateway:3000}
-      GATEWAY_INTERNAL_URL: http://gateway:3000
+      NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-https://api-atlashub.com}
+    ports:
+      - '3000:3000'
     depends_on:
       - gateway
     networks:
       - atlashub-network
     profiles: ['default']
-
-  # Cloudflare Tunnel (production only)
-  cloudflared:
-    image: cloudflare/cloudflared:latest
-    container_name: atlashub-cloudflared
-    restart: unless-stopped
-    command: tunnel run
-    environment:
-      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
-    networks:
-      - atlashub-network
-    profiles: ['prod']
-    depends_on:
-      - gateway
-      - dashboard
 
 volumes:
   pg_data:

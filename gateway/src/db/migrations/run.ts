@@ -30,7 +30,7 @@ export async function runMigrations(): Promise<void> {
   const executedNames = new Set(executed.rows.map((r) => r.name));
 
   // Migration files in order
-  const migrations = ['001_initial.sql'];
+  const migrations = ['001_initial.sql', '002_auth.sql'];
 
   for (const migration of migrations) {
     if (executedNames.has(migration)) {
