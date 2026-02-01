@@ -15,9 +15,9 @@ CREATE INDEX IF NOT EXISTS idx_users_email ON users(email);
 -- Invite Keys table
 CREATE TABLE IF NOT EXISTS invite_keys (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    key_hash VARCHAR(64) NOT NULL UNIQUE, -- SHA-256 hex
+    key_hash TEXT NOT NULL UNIQUE, -- SHA-256 hex
     key_prefix VARCHAR(10) NOT NULL, -- First 8 chars for display
-    created_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
     used_by UUID REFERENCES users(id) ON DELETE SET NULL,
     max_uses INTEGER NOT NULL DEFAULT 1,
     use_count INTEGER NOT NULL DEFAULT 0,

@@ -17,11 +17,13 @@ const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || 'http://localhost:300
 
 interface InviteKey {
   id: string;
-  key_prefix: string;
-  created_at: string;
-  expires_at: string | null;
-  used_at: string | null;
-  used_by_email: string | null;
+  keyPrefix: string;
+  createdBy: string;
+  usedBy: string | null;
+  maxUses: number;
+  useCount: number;
+  createdAt: string;
+  expiresAt: string | null;
 }
 
 export default function InvitesPage() {
@@ -204,27 +206,27 @@ export default function InvitesPage() {
                   {invites.map((invite) => (
                     <TableRow key={invite.id} className="border-zinc-800">
                       <TableCell className="font-mono text-zinc-300">
-                        {invite.key_prefix}...
+                        {invite.keyPrefix}...
                       </TableCell>
                       <TableCell className="text-zinc-400">
-                        {formatDate(invite.created_at)}
+                        {formatDate(invite.createdAt)}
                       </TableCell>
                       <TableCell className="text-zinc-400">
-                        {formatDate(invite.expires_at)}
+                        {formatDate(invite.expiresAt)}
                       </TableCell>
                       <TableCell>
-                        {invite.used_at ? (
+                        {invite.useCount >= invite.maxUses ? (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-zinc-800 text-zinc-400">
-                            Used by {invite.used_by_email}
+                            Used ({invite.useCount}/{invite.maxUses})
                           </span>
                         ) : (
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-emerald-500/10 text-emerald-400">
-                            Available
+                            Available ({invite.useCount}/{invite.maxUses})
                           </span>
                         )}
                       </TableCell>
                       <TableCell>
-                        {!invite.used_at && (
+                        {invite.useCount < invite.maxUses && (
                           <Button
                             variant="ghost"
                             size="sm"
