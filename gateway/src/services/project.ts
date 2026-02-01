@@ -8,6 +8,38 @@ import { generateApiKey, hashApiKey, encrypt, generateSecurePassword } from '../
 import { storageService } from './storage.js';
 import { NotFoundError } from '../lib/errors.js';
 
+/**
+ * Generate a URL-safe slug from a name
+ */
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .slice(0, 50) || 'project';
+}
+
+/**
+ * Generate a unique slug by appending a random suffix if needed
+ */
+async function generateUniqueSlug(baseName: string): Promise<string> {
+  const baseSlug = generateSlug(baseName);
+  
+  // Check if slug exists
+  const existing = await platformDb.query(
+    'SELECT 1 FROM projects WHERE slug = $1',
+    [baseSlug]
+  );
+  
+  if (existing.rows.length === 0) {
+    return baseSlug;
+  }
+  
+  // Append a random suffix
+  const suffix = randomUUID().slice(0, 6);
+  return `${baseSlug}-${suffix}`;
+}
+
 export const projectService = {
   async listProjects(): Promise<Project[]> {
     const result = await platformDb.query<{
@@ -58,6 +90,7 @@ export const projectService = {
     secretKey: string;
   }> {
     const projectId = randomUUID();
+    const slug = await generateUniqueSlug(data.name);
     const dbName = `proj_${projectId.replace(/-/g, '_')}`;
     const ownerRole = `${dbName}_owner`;
     const appRole = `${dbName}_app`;
@@ -122,14 +155,15 @@ export const projectService = {
         const projectResult = await client.query<{
           id: string;
           name: string;
+          slug: string;
           description: string | null;
           created_at: Date;
           updated_at: Date;
         }>(
-          `INSERT INTO projects (id, name, description)
-           VALUES ($1, $2, $3)
-           RETURNING id, name, description, created_at, updated_at`,
-          [projectId, data.name, data.description || null]
+          `INSERT INTO projects (id, name, slug, description)
+           VALUES ($1, $2, $3, $4)
+           RETURNING id, name, slug, description, created_at, updated_at`,
+          [projectId, data.name, slug, data.description || null]
         );
 
         const project = {
