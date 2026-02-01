@@ -38,8 +38,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
+# Note: pnpm workspaces put standalone output in a subfolder matching the package name
 COPY --from=builder /app/dashboard/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/standalone/dashboard ./
+COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/standalone/node_modules ./node_modules
 COPY --from=builder --chown=nextjs:nodejs /app/dashboard/.next/static ./.next/static
 
 USER nextjs
