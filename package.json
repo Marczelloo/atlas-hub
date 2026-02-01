@@ -1,26 +1,33 @@
 {
-  "name": "atlast-hub",
+  "name": "atlashub",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
+  "type": "module",
+  "packageManager": "pnpm@9.15.0",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
   },
-  "dependencies": {
-    "next": "16.1.6",
-    "react": "19.2.3",
-    "react-dom": "19.2.3"
+  "scripts": {
+    "dev": "pnpm run --parallel dev",
+    "dev:gateway": "pnpm --filter @atlashub/gateway dev",
+    "dev:dashboard": "pnpm --filter @atlashub/dashboard dev",
+    "build": "pnpm run -r build",
+    "build:shared": "pnpm --filter @atlashub/shared build",
+    "build:gateway": "pnpm --filter @atlashub/gateway build",
+    "build:dashboard": "pnpm --filter @atlashub/dashboard build",
+    "lint": "pnpm run -r lint",
+    "clean": "pnpm run -r clean && rimraf node_modules",
+    "test": "pnpm run -r test",
+    "docker:dev": "docker compose --profile dev up",
+    "docker:prod": "docker compose up -d",
+    "db:migrate": "pnpm --filter @atlashub/gateway db:migrate"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.1.6",
-    "tailwindcss": "^4",
-    "typescript": "^5"
+    "@types/node": "^22.0.0",
+    "eslint": "^9.0.0",
+    "prettier": "^3.4.0",
+    "rimraf": "^6.0.0",
+    "typescript": "^5.7.0"
   }
 }

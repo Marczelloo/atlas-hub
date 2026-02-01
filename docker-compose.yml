@@ -1,0 +1,127 @@
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:16-alpine
+    container_name: atlashub-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-platform}
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-postgres}']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - atlashub-network
+    profiles: ['dev', 'default']
+    ports:
+      - '${POSTGRES_PORT_EXPOSE:-127.0.0.1:5432}:5432'
+
+  # MinIO Object Storage
+  minio:
+    image: minio/minio:latest
+    container_name: atlashub-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:?MINIO_ACCESS_KEY is required}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:?MINIO_SECRET_KEY is required}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - atlashub-network
+    profiles: ['dev', 'default']
+    ports:
+      - '${MINIO_PORT_EXPOSE:-127.0.0.1:9000}:9000'
+      - '${MINIO_CONSOLE_PORT_EXPOSE:-127.0.0.1:9001}:9001'
+
+  # Gateway API
+  gateway:
+    build:
+      context: ./gateway
+      dockerfile: Dockerfile
+    container_name: atlashub-gateway
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3000
+      HOST: 0.0.0.0
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-platform}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_MAX_POOL_SIZE: ${POSTGRES_MAX_POOL_SIZE:-5}
+      MINIO_ENDPOINT: minio
+      MINIO_PORT: 9000
+      MINIO_USE_SSL: 'false'
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+      MINIO_REGION: ${MINIO_REGION:-us-east-1}
+      PLATFORM_MASTER_KEY: ${PLATFORM_MASTER_KEY:?PLATFORM_MASTER_KEY is required}
+      DEV_ADMIN_TOKEN: ${DEV_ADMIN_TOKEN:-}
+      CF_ACCESS_TEAM_DOMAIN: ${CF_ACCESS_TEAM_DOMAIN:-}
+      CF_ACCESS_AUDIENCE: ${CF_ACCESS_AUDIENCE:-}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-100}
+      RATE_LIMIT_WINDOW_MS: ${RATE_LIMIT_WINDOW_MS:-60000}
+      STATEMENT_TIMEOUT_MS: ${STATEMENT_TIMEOUT_MS:-5000}
+      MAX_ROWS_PER_QUERY: ${MAX_ROWS_PER_QUERY:-1000}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    networks:
+      - atlashub-network
+    profiles: ['default']
+
+  # Dashboard (Next.js)
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: atlashub-dashboard
+    restart: unless-stopped
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      NEXT_PUBLIC_GATEWAY_URL: ${NEXT_PUBLIC_GATEWAY_URL:-http://gateway:3000}
+      GATEWAY_INTERNAL_URL: http://gateway:3000
+    depends_on:
+      - gateway
+    networks:
+      - atlashub-network
+    profiles: ['default']
+
+  # Cloudflare Tunnel (production only)
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: atlashub-cloudflared
+    restart: unless-stopped
+    command: tunnel run
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    networks:
+      - atlashub-network
+    profiles: ['prod']
+    depends_on:
+      - gateway
+      - dashboard
+
+volumes:
+  pg_data:
+  minio_data:
+
+networks:
+  atlashub-network:
+    driver: bridge

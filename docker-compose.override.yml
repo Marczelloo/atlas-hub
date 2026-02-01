@@ -1,0 +1,26 @@
+# Docker Compose override for development
+# Usage: docker compose --profile dev up
+
+services:
+  postgres:
+    ports:
+      - '5432:5432'
+    profiles: ['dev']
+
+  minio:
+    ports:
+      - '9000:9000'
+      - '9001:9001'
+    profiles: ['dev']
+
+  # Gateway runs locally in dev, not in Docker
+  gateway:
+    profiles: ['never'] # Disabled in dev
+
+  # Dashboard runs locally in dev, not in Docker
+  dashboard:
+    profiles: ['never'] # Disabled in dev
+
+  # Cloudflared not needed in local dev
+  cloudflared:
+    profiles: ['never'] # Disabled in dev
