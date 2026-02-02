@@ -49,12 +49,10 @@ import {
 } from '@/components/ui/table';
 import { type Project, type ApiKey } from '@/lib/api';
 import { useDemoApi } from '@/lib/demo-api';
-import { useDemo } from '@/lib/demo-context';
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const api = useDemoApi();
-  const { isDemo } = useDemo();
   const [project, setProject] = useState<Project | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [isLoading, setIsLoading] = useState(true);
