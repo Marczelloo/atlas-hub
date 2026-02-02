@@ -1,15 +1,59 @@
 # AtlasHub
 
-A self-hosted backend platform similar to Supabase, providing per-project PostgreSQL databases and private file storage via a REST API.
+> **Self-hosted Backend-as-a-Service platform** — A lightweight Supabase alternative with per-project PostgreSQL databases, S3-compatible storage, and a modern admin dashboard.
 
-## Features
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-blue?logo=typescript)](https://www.typescriptlang.org/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=next.js)](https://nextjs.org/)
+[![Fastify](https://img.shields.io/badge/Fastify-5-white?logo=fastify)](https://fastify.dev/)
+[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)](https://www.postgresql.org/)
+[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?logo=docker)](https://www.docker.com/)
 
-- **Database-per-project**: Each project gets its own isolated PostgreSQL database
-- **Private storage**: MinIO-backed object storage with presigned URLs
-- **REST CRUD API**: Safe, parameterized queries (no raw SQL from clients)
-- **Admin SQL editor**: Full SQL access for administrators
-- **Docker-ready**: Works on Windows (amd64) and Raspberry Pi (arm64)
-- **Cloudflare integration**: Tunnel + Access for secure exposure
+## ✨ Features
+
+- **🗄️ Database-per-Project** — Each project gets an isolated PostgreSQL database with dedicated roles
+- **📦 Private Object Storage** — MinIO S3-compatible storage with presigned upload/download URLs
+- **🔐 Secure API Keys** — SHA-256 hashed keys with publishable/secret key separation
+- **📊 Admin Dashboard** — Modern Next.js UI with SQL editor, file browser, and real-time settings
+- **⚡ REST CRUD API** — Safe, parameterized queries with Supabase-like filter syntax
+- **🎛️ Runtime Settings** — Live-editable rate limits, database limits, and storage config
+- **📝 Audit Logging** — Track all administrative actions and settings changes
+- **🐳 Docker-Ready** — Works on Windows (amd64) and Raspberry Pi 5 (arm64)
+- **☁️ Cloudflare Integration** — Tunnel + Access for secure public exposure
+- **🎮 Demo Mode** — Try the dashboard with mock data using `?demo=true`
+
+## 🛠️ Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| **Frontend** | Next.js 16, React 19, Tailwind CSS, shadcn/ui, Monaco Editor |
+| **Backend** | Fastify 5, Node.js 20, TypeScript |
+| **Database** | PostgreSQL 16 |
+| **Storage** | MinIO (S3-compatible) |
+| **Validation** | Zod |
+| **Infrastructure** | Docker, Cloudflare Tunnel & Access |
+
+## 📸 Screenshots
+
+<details>
+<summary>Dashboard Overview</summary>
+
+*Coming soon*
+
+</details>
+
+<details>
+<summary>SQL Editor</summary>
+
+*Coming soon*
+
+</details>
+
+<details>
+<summary>Storage Browser</summary>
+
+*Coming soon*
+
+</details>
 
 ## Quick Start
 
