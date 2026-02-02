@@ -1,12 +1,16 @@
 import { config as dotenvConfig } from 'dotenv';
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Load .env from monorepo root (gateway/src/db/migrations -> root = 4 levels)
-dotenvConfig({ path: resolve(__dirname, '../../../../.env') });
+// In production (dist/db/migrations), it's also 3 levels up from dist
+const envPath = resolve(__dirname, '../../../../.env');
+if (existsSync(envPath)) {
+  dotenvConfig({ path: envPath });
+}
 
 // Import after dotenv loads
 const { platformDb } = await import('../platform.js');
@@ -50,9 +54,9 @@ export async function runMigrations(): Promise<void> {
   }
 
   console.log('Migrations complete.');
-  await platformDb.end();
 }
 
+// Only close pool if running as standalone script
 // Run if executed directly (works on Windows and Unix, handles URL encoding)
 const normalizedUrl = decodeURIComponent(import.meta.url);
 const normalizedArgv = `file:///${process.argv[1].replace(/\\/g, '/')}`;
@@ -60,7 +64,10 @@ const isMain = normalizedUrl === normalizedArgv;
 
 if (isMain) {
   runMigrations()
-    .then(() => process.exit(0))
+    .then(async () => {
+      await platformDb.end();
+      process.exit(0);
+    })
     .catch((err) => {
       console.error('Migration failed:', err);
       process.exit(1);

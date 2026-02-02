@@ -55,6 +55,9 @@ RUN addgroup --system --gid 1001 nodejs && \
 COPY --from=builder --chown=atlashub:nodejs /app/gateway/dist ./dist
 COPY --from=builder --chown=atlashub:nodejs /app/gateway/package.json ./package.json
 
+# Copy migration SQL files (needed at runtime)
+COPY --from=builder --chown=atlashub:nodejs /app/gateway/src/db/migrations/*.sql ./dist/db/migrations/
+
 # Copy built shared package
 COPY --from=builder --chown=atlashub:nodejs /app/packages/shared/dist ./node_modules/@atlashub/shared/dist
 COPY --from=builder --chown=atlashub:nodejs /app/packages/shared/package.json ./node_modules/@atlashub/shared/package.json
