@@ -3,6 +3,7 @@ import type { ApiKey, ApiKeyType, ProjectContext } from '@atlashub/shared';
 import { platformDb } from '../db/platform.js';
 import { generateApiKey, hashApiKey, constantTimeCompare } from '../lib/crypto.js';
 import { NotFoundError } from '../lib/errors.js';
+import { auditService } from './audit.js';
 
 export const apiKeyService = {
   async listProjectKeys(projectId: string): Promise<ApiKey[]> {
@@ -102,18 +103,24 @@ export const apiKeyService = {
     }
 
     const row = result.rows[0];
-    return {
-      apiKey: {
-        id: row.id,
-        projectId: row.project_id,
-        keyType: row.key_type,
-        keyPrefix: row.key_prefix,
-        createdAt: row.created_at,
-        expiresAt: row.expires_at,
-        revokedAt: row.revoked_at,
-      },
-      newKey,
+    const apiKey = {
+      id: row.id,
+      projectId: row.project_id,
+      keyType: row.key_type,
+      keyPrefix: row.key_prefix,
+      createdAt: row.created_at,
+      expiresAt: row.expires_at,
+      revokedAt: row.revoked_at,
     };
+
+    // Log key rotation
+    await auditService.log({
+      action: auditService.actions.KEY_ROTATED,
+      projectId,
+      details: { keyType, keyId: newKeyId },
+    });
+
+    return { apiKey, newKey };
   },
 
   async revokeKey(keyId: string): Promise<void> {
@@ -125,5 +132,11 @@ export const apiKeyService = {
     if (result.rowCount === 0) {
       throw new NotFoundError('API key not found or already revoked');
     }
+
+    // Log key revocation
+    await auditService.log({
+      action: auditService.actions.KEY_REVOKED,
+      details: { keyId },
+    });
   },
 };

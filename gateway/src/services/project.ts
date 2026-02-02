@@ -7,16 +7,19 @@ import { config } from '../config/env.js';
 import { generateApiKey, hashApiKey, encrypt, generateSecurePassword } from '../lib/crypto.js';
 import { storageService } from './storage.js';
 import { NotFoundError } from '../lib/errors.js';
+import { auditService } from './audit.js';
 
 /**
  * Generate a URL-safe slug from a name
  */
 function generateSlug(name: string): string {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 50) || 'project';
+  return (
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 50) || 'project'
+  );
 }
 
 /**
@@ -24,17 +27,14 @@ function generateSlug(name: string): string {
  */
 async function generateUniqueSlug(baseName: string): Promise<string> {
   const baseSlug = generateSlug(baseName);
-  
+
   // Check if slug exists
-  const existing = await platformDb.query(
-    'SELECT 1 FROM projects WHERE slug = $1',
-    [baseSlug]
-  );
-  
+  const existing = await platformDb.query('SELECT 1 FROM projects WHERE slug = $1', [baseSlug]);
+
   if (existing.rows.length === 0) {
     return baseSlug;
   }
-  
+
   // Append a random suffix
   const suffix = randomUUID().slice(0, 6);
   return `${baseSlug}-${suffix}`;
@@ -228,6 +228,13 @@ export const projectService = {
           [randomUUID(), projectId]
         );
 
+        // Log the project creation
+        await auditService.log({
+          action: auditService.actions.PROJECT_CREATED,
+          projectId,
+          details: { name: data.name, description: data.description },
+        });
+
         return { project, publishableKey, secretKey };
       });
     } catch (error) {
@@ -244,6 +251,12 @@ export const projectService = {
     if (!project) {
       throw new NotFoundError('Project not found');
     }
+
+    // Log project deletion before removing (project_id will be null after delete)
+    await auditService.log({
+      action: auditService.actions.PROJECT_DELETED,
+      details: { projectId: id, projectName: project.name },
+    });
 
     const dbName = `proj_${id.replace(/-/g, '_')}`;
     const ownerRole = `${dbName}_owner`;

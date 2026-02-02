@@ -56,6 +56,44 @@ export interface ApiKey {
   revokedAt: string | null;
 }
 
+// Stats interfaces
+export interface StatsOverview {
+  totalProjects: number;
+  totalUsers: number;
+  totalFiles: number;
+  totalStorageBytes: number;
+  activeApiKeys: number;
+  adminUsers: number;
+  regularUsers: number;
+}
+
+export interface ProjectStats {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+  storageBytes: number;
+  fileCount: number;
+  apiKeyCount: number;
+  bucketCount: number;
+}
+
+export interface TimelineData {
+  date: string;
+  projects: number;
+  users: number;
+  files: number;
+}
+
+export interface ActivityItem {
+  id: string;
+  action: string;
+  projectId: string | null;
+  projectName: string | null;
+  details: Record<string, unknown> | null;
+  createdAt: string;
+}
+
 export interface CreateProjectResponse {
   project: Project;
   publishableKey: string;
@@ -156,4 +194,110 @@ export const api = {
     const params = prefix ? `?prefix=${encodeURIComponent(prefix)}` : '';
     return fetchApi(`/admin/projects/${projectId}/buckets/${bucketName}/files${params}`);
   },
+
+  async getSignedUploadUrl(
+    projectId: string,
+    bucket: string,
+    path: string,
+    contentType: string,
+    maxSize?: number
+  ): Promise<{ objectKey: string; uploadUrl: string; expiresIn: number }> {
+    return fetchApi(`/admin/projects/${projectId}/signed-upload`, {
+      method: 'POST',
+      body: JSON.stringify({ bucket, path, contentType, maxSize }),
+    });
+  },
+
+  async deleteFile(
+    projectId: string,
+    bucketName: string,
+    objectKey: string
+  ): Promise<{ success: boolean }> {
+    return fetchApi(
+      `/admin/projects/${projectId}/buckets/${bucketName}/files?objectKey=${encodeURIComponent(objectKey)}`,
+      { method: 'DELETE' }
+    );
+  },
+
+  async getSignedDownloadUrl(
+    projectId: string,
+    bucketName: string,
+    objectKey: string
+  ): Promise<{ downloadUrl: string; expiresIn: number }> {
+    return fetchApi(
+      `/admin/projects/${projectId}/buckets/${bucketName}/signed-download?objectKey=${encodeURIComponent(objectKey)}`
+    );
+  },
+
+  // Stats
+  async getStatsOverview(): Promise<StatsOverview> {
+    return fetchApi('/admin/stats/overview');
+  },
+
+  async getProjectsStats(): Promise<{ projects: ProjectStats[] }> {
+    return fetchApi('/admin/stats/projects');
+  },
+
+  async getTimeline(days?: number): Promise<{ timeline: TimelineData[] }> {
+    const params = days ? `?days=${days}` : '';
+    return fetchApi(`/admin/stats/timeline${params}`);
+  },
+
+  async getActivity(limit?: number): Promise<{ activity: ActivityItem[] }> {
+    const params = limit ? `?limit=${limit}` : '';
+    return fetchApi(`/admin/activity${params}`);
+  },
+
+  // Settings
+  async getSettings(): Promise<PlatformSettings> {
+    return fetchApi('/admin/settings');
+  },
+
+  async updateRateLimits(rateLimitMax: number, rateLimitWindowMs: number): Promise<{
+    message: string;
+    rateLimitMax: number;
+    rateLimitWindowMs: number;
+  }> {
+    return fetchApi('/admin/settings/rate-limits', {
+      method: 'PUT',
+      body: JSON.stringify({ rateLimitMax, rateLimitWindowMs }),
+    });
+  },
+
+  async updateDatabaseLimits(sqlMaxRows: number, sqlStatementTimeoutMs: number): Promise<{
+    message: string;
+    sqlMaxRows: number;
+    sqlStatementTimeoutMs: number;
+  }> {
+    return fetchApi('/admin/settings/database-limits', {
+      method: 'PUT',
+      body: JSON.stringify({ sqlMaxRows, sqlStatementTimeoutMs }),
+    });
+  },
+
+  async updateStorageSettings(minioPublicUrl: string): Promise<{
+    message: string;
+    minioPublicUrl: string;
+  }> {
+    return fetchApi('/admin/settings/storage', {
+      method: 'PUT',
+      body: JSON.stringify({ minioPublicUrl }),
+    });
+  },
 };
+
+// Platform Settings interface
+export interface PlatformSettings {
+  version: string;
+  nodeEnv: string;
+  port: number;
+  rateLimitMax: number;
+  rateLimitWindowMs: number;
+  sqlMaxRows: number;
+  sqlStatementTimeoutMs: number;
+  minioEndpoint: string;
+  minioPublicUrl: string;
+  totalProjects: number;
+  totalUsers: number;
+  totalApiKeys: number;
+}

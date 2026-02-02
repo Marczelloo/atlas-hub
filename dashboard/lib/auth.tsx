@@ -24,11 +24,25 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
+// Check if we're in demo mode by looking at URL params
+function checkDemoMode(): boolean {
+  if (typeof window === 'undefined') return false;
+  const params = new URLSearchParams(window.location.search);
+  const demoParam = params.get('demo');
+  return demoParam === 'true' || demoParam === '1';
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const refresh = useCallback(async () => {
+    // Skip auth check in demo mode
+    if (checkDemoMode()) {
+      setIsLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch(`${GATEWAY_URL}/auth/me`, {
         credentials: 'include',

@@ -20,6 +20,10 @@ import {
   Database,
   Columns,
   HelpCircle,
+  Upload,
+  Trash2,
+  Download,
+  Eye,
 } from 'lucide-react';
 import Link from 'next/link';
 import Editor from '@monaco-editor/react';
@@ -43,10 +47,14 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { api, type Project, type ApiKey } from '@/lib/api';
+import { type Project, type ApiKey } from '@/lib/api';
+import { useDemoApi } from '@/lib/demo-api';
+import { useDemo } from '@/lib/demo-context';
 
 export default function ProjectDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
+  const api = useDemoApi();
+  const { isDemo } = useDemo();
   const [project, setProject] = useState<Project | null>(null);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -94,13 +102,16 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
   const [files, setFiles] = useState<Array<{ key: string; size: number; lastModified: string }>>(
     []
   );
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string | null>(null);
+  const [deletingFile, setDeletingFile] = useState<string | null>(null);
 
   useEffect(() => {
     loadProject();
     loadKeys();
     loadTables();
     loadBuckets();
-  }, [id]);
+  }, [id, api]);
 
   useEffect(() => {
     if (selectedTable) {
@@ -248,6 +259,93 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
     } catch (err) {
       console.error('Failed to load files:', err);
     }
+  }
+
+  async function handleFileUpload(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    if (!file || !selectedBucket) return;
+
+    setIsUploading(true);
+    setUploadProgress(`Preparing to upload ${file.name}...`);
+
+    try {
+      // Get signed upload URL
+      const { uploadUrl, objectKey } = await api.getSignedUploadUrl(
+        id,
+        selectedBucket,
+        file.name,
+        file.type || 'application/octet-stream',
+        file.size
+      );
+
+      setUploadProgress(`Uploading ${file.name}...`);
+
+      // Upload directly to MinIO
+      const uploadResponse = await fetch(uploadUrl, {
+        method: 'PUT',
+        body: file,
+        headers: {
+          'Content-Type': file.type || 'application/octet-stream',
+        },
+      });
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed: ${uploadResponse.status}`);
+      }
+
+      setUploadProgress(`Upload complete!`);
+
+      // Refresh file list
+      await loadFiles(selectedBucket);
+
+      // Clear the input
+      event.target.value = '';
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Upload failed');
+    } finally {
+      setIsUploading(false);
+      setTimeout(() => setUploadProgress(null), 2000);
+    }
+  }
+
+  async function handleDeleteFile(objectKey: string) {
+    if (!selectedBucket) return;
+    if (!confirm(`Are you sure you want to delete this file?\n\n${objectKey}`)) return;
+
+    setDeletingFile(objectKey);
+    try {
+      await api.deleteFile(id, selectedBucket, objectKey);
+      await loadFiles(selectedBucket);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Delete failed');
+    } finally {
+      setDeletingFile(null);
+    }
+  }
+
+  async function handleDownloadFile(objectKey: string) {
+    if (!selectedBucket) return;
+    try {
+      const { downloadUrl } = await api.getSignedDownloadUrl(id, selectedBucket, objectKey);
+      window.open(downloadUrl, '_blank');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Download failed');
+    }
+  }
+
+  async function handlePreviewFile(objectKey: string) {
+    if (!selectedBucket) return;
+    try {
+      const { downloadUrl } = await api.getSignedDownloadUrl(id, selectedBucket, objectKey);
+      window.open(downloadUrl, '_blank');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Preview failed');
+    }
+  }
+
+  function isImageFile(filename: string): boolean {
+    const ext = filename.split('.').pop()?.toLowerCase();
+    return ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg', 'bmp', 'ico'].includes(ext || '');
   }
 
   async function handleRotateKey(keyType: 'publishable' | 'secret') {
@@ -648,12 +746,51 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
         <TabsContent value="storage" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle className="text-base">Storage Buckets</CardTitle>
-              <CardDescription>
-                {buckets.length === 0
-                  ? 'No buckets configured'
-                  : `${buckets.length} bucket${buckets.length === 1 ? '' : 's'} available`}
-              </CardDescription>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="text-base">Storage Buckets</CardTitle>
+                  <CardDescription>
+                    {buckets.length === 0
+                      ? 'No buckets configured'
+                      : `${buckets.length} bucket${buckets.length === 1 ? '' : 's'} available`}
+                  </CardDescription>
+                </div>
+                {selectedBucket && (
+                  <div className="flex items-center gap-2">
+                    {uploadProgress && (
+                      <span className="text-sm text-muted-foreground">{uploadProgress}</span>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={isUploading}
+                      onClick={() => document.getElementById('file-upload')?.click()}
+                    >
+                      {isUploading ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Upload className="h-4 w-4 mr-2" />
+                      )}
+                      Upload File
+                    </Button>
+                    <input
+                      id="file-upload"
+                      type="file"
+                      className="hidden"
+                      onChange={handleFileUpload}
+                      disabled={isUploading}
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => selectedBucket && loadFiles(selectedBucket)}
+                      className="h-8 w-8"
+                    >
+                      <RefreshCw className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
             </CardHeader>
             <CardContent>
               {buckets.length === 0 ? (
@@ -682,6 +819,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                         <div className="text-center py-8 text-muted-foreground">
                           <FileText className="h-8 w-8 mx-auto mb-2 opacity-50" />
                           <p className="text-sm">No files in this bucket</p>
+                          <p className="text-xs mt-1">Upload a file to get started</p>
                         </div>
                       ) : (
                         <Table>
@@ -690,6 +828,7 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                               <TableHead>File</TableHead>
                               <TableHead>Size</TableHead>
                               <TableHead>Last Modified</TableHead>
+                              <TableHead className="w-28 text-right">Actions</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -707,6 +846,44 @@ export default function ProjectDetailPage({ params }: { params: Promise<{ id: st
                                 </TableCell>
                                 <TableCell className="text-xs">
                                   {new Date(file.lastModified).toLocaleString()}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  <div className="flex items-center justify-end gap-0.5">
+                                    {isImageFile(file.key) && (
+                                      <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-7 w-7"
+                                        onClick={() => handlePreviewFile(file.key)}
+                                        title="Preview image"
+                                      >
+                                        <Eye className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7"
+                                      onClick={() => handleDownloadFile(file.key)}
+                                      title="Download file"
+                                    >
+                                      <Download className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => handleDeleteFile(file.key)}
+                                      disabled={deletingFile === file.key}
+                                      title="Delete file"
+                                    >
+                                      {deletingFile === file.key ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      )}
+                                    </Button>
+                                  </div>
                                 </TableCell>
                               </TableRow>
                             ))}

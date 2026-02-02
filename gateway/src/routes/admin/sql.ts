@@ -4,6 +4,7 @@ import { sqlService } from '../../services/sql.js';
 import { projectDb } from '../../db/project.js';
 import { BadRequestError, NotFoundError } from '../../lib/errors.js';
 import { projectService } from '../../services/project.js';
+import { auditService } from '../../services/audit.js';
 
 export const sqlRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) => {
   // List tables in project database
@@ -79,6 +80,17 @@ export const sqlRoutes: FastifyPluginAsync = async (fastify: FastifyInstance) =>
     }
 
     const result = await sqlService.executeAdminQuery(request.params.id, parseResult.data.sql);
+
+    // Log SQL execution (only log DDL commands for audit trail)
+    const sqlUpper = parseResult.data.sql.trim().toUpperCase();
+    if (sqlUpper.startsWith('CREATE') || sqlUpper.startsWith('ALTER') || sqlUpper.startsWith('DROP')) {
+      await auditService.log({
+        action: sqlUpper.startsWith('CREATE TABLE') ? auditService.actions.TABLE_CREATED : auditService.actions.SQL_EXECUTED,
+        projectId: request.params.id,
+        details: { sql: parseResult.data.sql.slice(0, 200) }, // Truncate for safety
+      });
+    }
+
     return reply.send({ data: result });
   });
 };

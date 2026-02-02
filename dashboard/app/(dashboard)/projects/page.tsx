@@ -16,9 +16,13 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { api, type Project } from '@/lib/api';
+import { type Project } from '@/lib/api';
+import { useDemoApi } from '@/lib/demo-api';
+import { useDemo } from '@/lib/demo-context';
 
 export default function ProjectsPage() {
+  const api = useDemoApi();
+  const { isDemo } = useDemo();
   const [projects, setProjects] = useState<Project[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -38,7 +42,7 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     loadProjects();
-  }, []);
+  }, [api]);
 
   async function loadProjects() {
     try {
@@ -252,7 +256,7 @@ export default function ProjectsPage() {
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {projects.map((project) => (
             <Card key={project.id} className="group relative">
-              <Link href={`/projects/${project.id}`} className="absolute inset-0" />
+              <Link href={isDemo ? `/projects/${project.id}?demo=true` : `/projects/${project.id}`} className="absolute inset-0" />
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex items-center gap-3">

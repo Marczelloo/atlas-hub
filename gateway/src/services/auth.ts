@@ -5,6 +5,7 @@ import { platformDb } from '../db/platform.js';
 import { config } from '../config/env.js';
 import { hashApiKey } from '../lib/crypto.js';
 import { BadRequestError, UnauthorizedError, NotFoundError } from '../lib/errors.js';
+import { auditService } from './audit.js';
 
 const BCRYPT_ROUNDS = 12;
 
@@ -62,13 +63,22 @@ export const authService = {
       );
 
       const row = result.rows[0];
-      return {
+      const user = {
         id: row.id,
         email: row.email,
         role: row.role,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       };
+
+      // Log user creation
+      await auditService.log({
+        action: auditService.actions.USER_CREATED,
+        userId: user.id,
+        details: { email: user.email, role: user.role },
+      });
+
+      return user;
     } catch (error) {
       if (error instanceof Error && error.message.includes('unique constraint')) {
         throw new BadRequestError('Email already registered');
@@ -101,13 +111,22 @@ export const authService = {
       throw new UnauthorizedError('Invalid email or password');
     }
 
-    return {
+    const user = {
       id: row.id,
       email: row.email,
       role: row.role,
       createdAt: row.created_at,
       updatedAt: row.updated_at,
     };
+
+    // Log successful login
+    await auditService.log({
+      action: auditService.actions.USER_LOGIN,
+      userId: user.id,
+      details: { email: user.email },
+    });
+
+    return user;
   },
 
   async getUserById(userId: string): Promise<User | null> {

@@ -91,6 +91,47 @@ export interface RotateKeyResponse {
 }
 
 // ============================================================
+// Stats Types
+// ============================================================
+
+export interface StatsOverview {
+  totalProjects: number;
+  totalUsers: number;
+  totalFiles: number;
+  totalStorageBytes: number;
+  activeApiKeys: number;
+  adminUsers: number;
+  regularUsers: number;
+}
+
+export interface ProjectStats {
+  id: string;
+  name: string;
+  slug: string;
+  createdAt: string;
+  storageBytes: number;
+  fileCount: number;
+  apiKeyCount: number;
+  bucketCount: number;
+}
+
+export interface TimelineData {
+  date: string;
+  projects: number;
+  users: number;
+  files: number;
+}
+
+export interface ActivityItem {
+  id: string;
+  action: string;
+  projectId: string | null;
+  projectName: string | null;
+  details: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+// ============================================================
 // Config Types
 // ============================================================
 

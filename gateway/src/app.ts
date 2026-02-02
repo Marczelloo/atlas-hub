@@ -9,8 +9,21 @@ import { publicRoutes } from './routes/public/index.js';
 import { healthRoutes } from './routes/health.js';
 import { authRoutes } from './routes/auth.js';
 import { errorHandler } from './lib/errors.js';
+import { runtimeSettings } from './services/runtime-settings.js';
 
 export async function buildApp() {
+  // Initialize runtime settings from config
+  const minioProtocol = config.minio.useSSL ? 'https' : 'http';
+  const minioPublicUrl = `${minioProtocol}://${config.minio.endpoint}:${config.minio.port}`;
+  
+  runtimeSettings.init({
+    rateLimitMax: config.rateLimitMax,
+    rateLimitWindowMs: config.rateLimitWindowMs,
+    sqlMaxRows: config.query.maxRowsPerQuery,
+    sqlStatementTimeoutMs: config.query.statementTimeoutMs,
+    minioPublicUrl,
+  });
+
   const app = Fastify({
     logger: {
       level: config.logLevel,
@@ -51,10 +64,10 @@ export async function buildApp() {
   // Cookie support
   await app.register(cookie);
 
-  // Rate limiting
+  // Rate limiting with dynamic settings
   await app.register(rateLimit, {
-    max: config.rateLimitMax,
-    timeWindow: config.rateLimitWindowMs,
+    max: () => runtimeSettings.getRateLimitMax(),
+    timeWindow: () => runtimeSettings.getRateLimitWindowMs(),
     keyGenerator: (request) => {
       // Use project ID from context if available, otherwise IP
       const projectId = (request as unknown as { projectContext?: { projectId: string } })

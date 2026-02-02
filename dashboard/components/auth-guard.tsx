@@ -3,6 +3,7 @@
 import { useEffect, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { useDemo } from '@/lib/demo-context';
 import { Loader2 } from 'lucide-react';
 
 interface AuthGuardProps {
@@ -13,8 +14,12 @@ interface AuthGuardProps {
 export function AuthGuard({ children, requireAdmin = false }: AuthGuardProps) {
   const router = useRouter();
   const { isLoading, isAuthenticated, isAdmin } = useAuth();
+  const { isDemo } = useDemo();
 
   useEffect(() => {
+    // Skip auth checks in demo mode
+    if (isDemo) return;
+
     if (!isLoading) {
       if (!isAuthenticated) {
         router.push('/login');
@@ -23,7 +28,12 @@ export function AuthGuard({ children, requireAdmin = false }: AuthGuardProps) {
         router.push('/');
       }
     }
-  }, [isLoading, isAuthenticated, isAdmin, requireAdmin, router]);
+  }, [isLoading, isAuthenticated, isAdmin, requireAdmin, router, isDemo]);
+
+  // In demo mode, always render children
+  if (isDemo) {
+    return <>{children}</>;
+  }
 
   if (isLoading) {
     return (
