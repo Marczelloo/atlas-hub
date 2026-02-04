@@ -7,8 +7,9 @@ AtlasHub is a self-hosted backend platform similar to Supabase. It provides per-
 Before integrating AtlasHub with your app, you need:
 
 1. **AtlasHub running** with a Cloudflare Tunnel exposing the API (e.g., `https://api.yourdomain.com`)
-2. **A project created** in the AtlasHub dashboard
-3. **API keys** from that project (publishable and secret)
+2. **First admin account created** — see [README.md](../README.md#manual-setup--first-admin-account) if setup didn't auto-launch
+3. **A project created** in the AtlasHub dashboard
+4. **API keys** from that project (publishable and secret)
 
 ## Environment Variables
 
@@ -185,13 +186,6 @@ export async function createPostsTable() {
     }),
   });
 
-=======
-        { name: 'created_at', type: 'timestamptz', default: 'now()' }
-      ]
-    }),
-  });
-  
->>>>>>> 9dfe009ac3cb9e92329e076eb72381879f14fcbd
   if (!res.ok) throw new Error('Failed to create table');
   return res.json();
 }

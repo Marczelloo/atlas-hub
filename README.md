@@ -114,9 +114,68 @@ _Coming soon_
    pnpm dev
    ```
 
-   - Gateway: http://localhost:3000
-   - Dashboard: http://localhost:3001
-   - MinIO Console: http://localhost:9001
+   - Gateway: <http://localhost:3000>
+   - Dashboard: <http://localhost:3001>
+   - MinIO Console: <http://localhost:9001>
+
+6. **Create your admin account:**
+
+   On first launch, open the dashboard at <http://localhost:3001> and you'll be redirected to the setup page to create your first admin account.
+
+   If the setup page doesn't appear automatically, see [Manual Setup](#manual-setup--first-admin-account) below.
+
+### Manual Setup / First Admin Account
+
+When AtlasHub starts for the first time with no users, it requires initial admin setup. This typically happens automatically via the dashboard, but if it doesn't:
+
+#### Option 1: Dashboard Setup Page
+
+Navigate to the login page — it should detect no users exist and show the setup form. If not, try:
+
+```text
+http://localhost:3001/login
+```
+
+#### Option 2: API Setup Endpoint
+
+1. **Check if setup is needed:**
+
+   ```bash
+   curl http://localhost:3001/auth/setup-status
+   ```
+
+   Response: `{"data":{"setupRequired":true}}` means no admin exists yet.
+
+2. **Create the first admin account:**
+
+   ```bash
+   curl -X POST http://localhost:3001/auth/setup \
+     -H "Content-Type: application/json" \
+     -d '{"email": "admin@example.com", "password": "your-password-min-8-chars"}'
+   ```
+
+   Requirements:
+   - Email must be valid format
+   - Password must be at least 8 characters
+
+#### Security Note
+
+The `/auth/setup` endpoint is a **one-time use only** endpoint. Once the first admin account is created, this endpoint becomes permanently disabled and returns:
+
+```json
+{ "error": "Setup has already been completed" }
+```
+
+This prevents unauthorized account creation after initial setup. All subsequent users must be invited by an admin through the dashboard.
+
+#### Troubleshooting Setup Issues
+
+| Issue                              | Cause                    | Solution                                    |
+| ---------------------------------- | ------------------------ | ------------------------------------------- |
+| Setup page not appearing           | Browser cached old state | Clear cookies/cache for localhost           |
+| "Setup has already been completed" | Admin already exists     | Use /login instead of /setup                |
+| Connection refused                 | Gateway not running      | Check `docker compose logs gateway`         |
+| Database connection error          | Postgres not ready       | Wait for `docker compose up` to fully start |
 
 ### Development Auth Bypass
 
