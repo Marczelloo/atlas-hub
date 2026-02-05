@@ -209,6 +209,9 @@ importers:
       '@atlashub/shared':
         specifier: workspace:*
         version: link:../packages/shared
+      '@aws-sdk/client-s3':
+        specifier: ^3.645.0
+        version: 3.980.0
       croner:
         specifier: ^8.1.0
         version: 8.1.2

@@ -83,6 +83,55 @@ async function runPgDump(
   });
 }
 
+// Run pg_restore command
+async function runPgRestore(
+  connectionString: string,
+  data: Buffer,
+  options: string[] = []
+): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    const args = [
+      '-d',
+      connectionString,
+      '--clean',
+      '--if-exists',
+      '--no-owner',
+      '--no-acl',
+      ...options,
+    ];
+    const proc = spawn('pg_restore', args, {
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    const stdoutChunks: string[] = [];
+    const stderrChunks: string[] = [];
+
+    proc.stdout.on('data', (chunk) => stdoutChunks.push(chunk.toString()));
+    proc.stderr.on('data', (chunk) => stderrChunks.push(chunk.toString()));
+
+    // Write backup data to stdin
+    proc.stdin.write(data);
+    proc.stdin.end();
+
+    proc.on('close', (code) => {
+      // pg_restore returns 0 on success, but can return 1 with warnings
+      // that are not fatal (e.g., "could not execute query: ERROR: role does not exist")
+      if (code === 0 || code === 1) {
+        resolve({
+          stdout: stdoutChunks.join(''),
+          stderr: stderrChunks.join(''),
+        });
+      } else {
+        reject(new Error(`pg_restore exited with code ${code}: ${stderrChunks.join('')}`));
+      }
+    });
+
+    proc.on('error', (err) => {
+      reject(new Error(`Failed to spawn pg_restore: ${err.message}`));
+    });
+  });
+}
+
 // Ensure backup bucket exists
 async function ensureBackupBucket(): Promise<void> {
   try {
@@ -439,5 +488,174 @@ export const backupService = {
     );
 
     return result.rows.length;
+  },
+
+  /**
+   * Restore a project database from a backup
+   * Only supports project backups in SQL format
+   */
+  async restoreBackup(
+    backupId: string,
+    userId?: string
+  ): Promise<{ success: boolean; warnings: string[] }> {
+    const backup = await this.getBackup(backupId);
+    if (!backup) throw new NotFoundError('Backup not found');
+    if (backup.status !== 'completed') throw new BadRequestError('Backup not completed');
+    if (backup.backupType !== 'project')
+      throw new BadRequestError('Only project backups can be restored');
+    if (backup.format !== 'sql')
+      throw new BadRequestError('Only SQL format backups can be restored');
+    if (!backup.projectId) throw new BadRequestError('Backup has no associated project');
+
+    // Get project credentials
+    const credsResult = await platformDb.query<{
+      encrypted_connection_string: string;
+      iv: string;
+      auth_tag: string;
+    }>(
+      `SELECT encrypted_connection_string, iv, auth_tag FROM project_db_creds
+       WHERE project_id = $1 AND role = 'owner'`,
+      [backup.projectId]
+    );
+
+    if (credsResult.rows.length === 0) {
+      throw new BadRequestError('Project credentials not found');
+    }
+
+    const { decrypt } = await import('../lib/crypto.js');
+    const connStr = decrypt(
+      credsResult.rows[0].encrypted_connection_string,
+      credsResult.rows[0].iv,
+      credsResult.rows[0].auth_tag
+    );
+
+    // Download backup from MinIO
+    const getCommand = new GetObjectCommand({
+      Bucket: BACKUP_BUCKET,
+      Key: backup.objectKey,
+    });
+    const response = await s3Client.send(getCommand);
+
+    if (!response.Body) {
+      throw new BadRequestError('Backup file is empty');
+    }
+
+    // Convert stream to buffer
+    const chunks: Buffer[] = [];
+    for await (const chunk of response.Body as AsyncIterable<Uint8Array>) {
+      chunks.push(Buffer.from(chunk));
+    }
+    const data = Buffer.concat(chunks);
+
+    // Run pg_restore
+    const result = await runPgRestore(connStr, data);
+
+    // Parse warnings from stderr
+    const warnings: string[] = [];
+    if (result.stderr) {
+      const lines = result.stderr.split('\n').filter((line) => line.trim());
+      warnings.push(...lines.slice(0, 10)); // Limit to 10 warnings
+    }
+
+    await auditService.log({
+      action: 'backup.restored',
+      projectId: backup.projectId,
+      userId,
+      details: { backupId, backupType: backup.backupType, warnings: warnings.length },
+    });
+
+    return { success: true, warnings };
+  },
+
+  /**
+   * Apply smart retention policy for project backups
+   * Keeps: all from last 3 days, 1 from prev week, 1 from 2 weeks ago
+   */
+  async applyRetentionPolicy(
+    projectId?: string | null
+  ): Promise<{ deleted: number; kept: number }> {
+    const now = new Date();
+    const threeDaysAgo = new Date(now.getTime() - 3 * 24 * 60 * 60 * 1000);
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+    // Build query
+    let whereClause = "backup_type = 'project' AND status = 'completed'";
+    const params: unknown[] = [];
+
+    if (projectId) {
+      whereClause += ` AND project_id = $1`;
+      params.push(projectId);
+    }
+
+    // Get all completed project backups
+    const result = await platformDb.query<{
+      id: string;
+      project_id: string;
+      object_key: string;
+      created_at: Date;
+    }>(
+      `SELECT id, project_id, object_key, created_at FROM backups
+       WHERE ${whereClause}
+       ORDER BY project_id, created_at DESC`,
+      params
+    );
+
+    // Group by project
+    const backupsByProject = new Map<string, typeof result.rows>();
+    for (const row of result.rows) {
+      const pid = row.project_id;
+      if (!backupsByProject.has(pid)) {
+        backupsByProject.set(pid, []);
+      }
+      backupsByProject.get(pid)!.push(row);
+    }
+
+    const toDelete: string[] = [];
+    const toDeleteKeys: string[] = [];
+
+    for (const [, backups] of backupsByProject) {
+      // Backups from last 3 days are kept (not in toDelete)
+
+      // From last week (but not last 3 days), keep only the newest
+      const lastWeek = backups.filter(
+        (b) => b.created_at < threeDaysAgo && b.created_at >= oneWeekAgo
+      );
+      const deleteFromLastWeek = lastWeek.slice(1);
+
+      // From 1-2 weeks ago, keep only the newest
+      const prevWeek = backups.filter(
+        (b) => b.created_at < oneWeekAgo && b.created_at >= twoWeeksAgo
+      );
+      const deleteFromPrevWeek = prevWeek.slice(1);
+
+      // Older than 2 weeks - delete all
+      const older = backups.filter((b) => b.created_at < twoWeeksAgo);
+
+      // Mark for deletion
+      for (const b of [...deleteFromLastWeek, ...deleteFromPrevWeek, ...older]) {
+        toDelete.push(b.id);
+        toDeleteKeys.push(b.object_key);
+      }
+    }
+
+    // Delete from MinIO
+    for (const key of toDeleteKeys) {
+      try {
+        await s3Client.send(new DeleteObjectCommand({ Bucket: BACKUP_BUCKET, Key: key }));
+      } catch {
+        // Ignore
+      }
+    }
+
+    // Delete from database
+    if (toDelete.length > 0) {
+      await platformDb.query(`DELETE FROM backups WHERE id = ANY($1::uuid[])`, [toDelete]);
+    }
+
+    return {
+      deleted: toDelete.length,
+      kept: result.rows.length - toDelete.length,
+    };
   },
 };

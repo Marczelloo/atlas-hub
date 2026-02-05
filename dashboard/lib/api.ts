@@ -502,6 +502,21 @@ export const api = {
     return fetchApi('/admin/backups/cleanup', { method: 'POST' });
   },
 
+  async restoreBackup(
+    id: string
+  ): Promise<{ data: { success: boolean; warnings: string[]; message: string } }> {
+    return fetchApi(`/admin/backups/${id}/restore`, { method: 'POST' });
+  },
+
+  async applyBackupRetention(
+    projectId?: string | null
+  ): Promise<{ data: { deleted: number; kept: number; message: string } }> {
+    return fetchApi('/admin/backups/retention', {
+      method: 'POST',
+      body: JSON.stringify({ projectId }),
+    });
+  },
+
   // Data Tools (Import/Export) - Per Project
   async listDataToolsJobs(projectId: string): Promise<{ data: ImportExportJob[] }> {
     return fetchApi(`/admin/projects/${projectId}/data-tools/jobs`);

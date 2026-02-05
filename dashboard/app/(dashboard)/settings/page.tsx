@@ -106,7 +106,7 @@ export default function SettingsPage() {
       setSuccess(null);
 
       const result = await api.updateRateLimits(rateLimitMax, rateLimitWindowSeconds * 1000);
-      
+
       // Update local state with new values
       if (settings) {
         setSettings({
@@ -115,7 +115,7 @@ export default function SettingsPage() {
           rateLimitWindowMs: result.rateLimitWindowMs,
         });
       }
-      
+
       setSuccess('Rate limits updated successfully! Changes take effect immediately.');
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
@@ -137,7 +137,7 @@ export default function SettingsPage() {
       setSuccess(null);
 
       const result = await api.updateDatabaseLimits(sqlMaxRows, sqlStatementTimeoutSeconds * 1000);
-      
+
       // Update local state with new values
       if (settings) {
         setSettings({
@@ -146,7 +146,7 @@ export default function SettingsPage() {
           sqlStatementTimeoutMs: result.sqlStatementTimeoutMs,
         });
       }
-      
+
       setSuccess('Database limits updated successfully! Changes take effect immediately.');
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
@@ -168,7 +168,7 @@ export default function SettingsPage() {
       setSuccess(null);
 
       const result = await api.updateStorageSettings(minioPublicUrl);
-      
+
       // Update local state with new values
       if (settings) {
         setSettings({
@@ -176,7 +176,7 @@ export default function SettingsPage() {
           minioPublicUrl: result.minioPublicUrl,
         });
       }
-      
+
       setSuccess('Storage settings updated successfully! Changes take effect immediately.');
       setTimeout(() => setSuccess(null), 5000);
     } catch (err) {
@@ -372,7 +372,7 @@ export default function SettingsPage() {
               <Gauge className="h-5 w-5 text-primary" />
               <div>
                 <CardTitle className="text-base">Rate Limiting</CardTitle>
-                <CardDescription>API request throttling configuration (live editable)</CardDescription>
+                <CardDescription>API request throttling configuration</CardDescription>
               </div>
             </div>
           </CardHeader>
@@ -392,6 +392,7 @@ export default function SettingsPage() {
                   disabled={isDemo}
                   className="font-mono text-sm"
                 />
+                <p className="text-xs text-muted-foreground">Live: changes apply immediately</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="rateLimitWindow" className="text-xs text-muted-foreground">
@@ -407,18 +408,21 @@ export default function SettingsPage() {
                   disabled={isDemo}
                   className="font-mono text-sm"
                 />
+                <p className="text-xs text-amber-500">Requires gateway restart</p>
               </div>
             </div>
             <div className="p-3 bg-muted/50 rounded-lg">
               <p className="text-sm">
                 <span className="font-medium">{rateLimitMax}</span> requests per{' '}
-                <span className="font-medium">{rateLimitWindowSeconds}</span>{' '}
-                seconds per IP address
+                <span className="font-medium">{rateLimitWindowSeconds}</span> seconds per IP address
+              </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Admin users are not subject to rate limiting.
               </p>
             </div>
             <div className="flex items-center justify-between">
               <p className="text-xs text-muted-foreground">
-                Changes take effect immediately without restart.
+                Max requests changes are live. Window changes require restart.
               </p>
               <Button
                 size="sm"
@@ -491,11 +495,7 @@ export default function SettingsPage() {
               <p className="text-xs text-muted-foreground">
                 Changes take effect immediately without restart.
               </p>
-              <Button
-                size="sm"
-                onClick={handleSaveDbLimits}
-                disabled={isDemo || savingDbLimits}
-              >
+              <Button size="sm" onClick={handleSaveDbLimits} disabled={isDemo || savingDbLimits}>
                 {savingDbLimits ? (
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 ) : (

@@ -60,6 +60,21 @@ export const backupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
     return reply.send({ data: result });
   });
 
+  // Restore a backup (project backups only)
+  fastify.post<{ Params: { id: string } }>('/:id/restore', async (request, reply) => {
+    const result = await backupService.restoreBackup(request.params.id, request.user?.id);
+    return reply.send({
+      data: {
+        success: result.success,
+        warnings: result.warnings,
+        message:
+          result.warnings.length > 0
+            ? `Restore completed with ${result.warnings.length} warning(s)`
+            : 'Restore completed successfully',
+      },
+    });
+  });
+
   // Delete backup
   fastify.delete<{ Params: { id: string } }>('/:id', async (request, reply) => {
     await backupService.deleteBackup(request.params.id, request.user?.id);
@@ -70,5 +85,20 @@ export const backupRoutes: FastifyPluginAsync = async (fastify: FastifyInstance)
   fastify.post('/cleanup', async (_request, reply) => {
     const count = await backupService.cleanupExpiredBackups();
     return reply.send({ data: { deletedCount: count } });
+  });
+
+  // Apply retention policy (smart cleanup)
+  fastify.post('/retention', async (request, reply) => {
+    const { projectId } = request.body as { projectId?: string | null };
+    const result = await backupService.applyRetentionPolicy(
+      projectId === undefined ? undefined : projectId
+    );
+    return reply.send({
+      data: {
+        deleted: result.deleted,
+        kept: result.kept,
+        message: `Retention applied: ${result.deleted} deleted, ${result.kept} kept`,
+      },
+    });
   });
 };

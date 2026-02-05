@@ -13,6 +13,9 @@ import {
   Clock,
   Database,
   Table,
+  RotateCcw,
+  Sparkles,
+  AlertTriangle,
 } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,12 +41,17 @@ export default function BackupsPage() {
 
   // Dialog state
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [restoreDialogOpen, setRestoreDialogOpen] = useState(false);
+  const [restoreBackup, setRestoreBackup] = useState<Backup | null>(null);
+  const [restoreWarnings, setRestoreWarnings] = useState<string[]>([]);
   const [formData, setFormData] = useState<CreateBackupInput>({
     backupType: 'platform',
     format: 'sql',
     retentionDays: 7,
   });
   const [saving, setSaving] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+  const [applyingRetention, setApplyingRetention] = useState(false);
 
   useEffect(() => {
     if (isDemo) {
@@ -185,6 +193,62 @@ export default function BackupsPage() {
     }
   }
 
+  function openRestoreDialog(backup: Backup) {
+    setRestoreBackup(backup);
+    setRestoreWarnings([]);
+    setRestoreDialogOpen(true);
+  }
+
+  async function handleRestore() {
+    if (isDemo || !restoreBackup) {
+      setError('Cannot restore backups in demo mode');
+      return;
+    }
+
+    try {
+      setRestoring(true);
+      setError(null);
+      const result = await api.restoreBackup(restoreBackup.id);
+      setRestoreWarnings(result.data.warnings);
+      if (result.data.warnings.length === 0) {
+        setSuccess('Database restored successfully!');
+        setRestoreDialogOpen(false);
+        setTimeout(() => setSuccess(null), 5000);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to restore backup');
+    } finally {
+      setRestoring(false);
+    }
+  }
+
+  async function handleApplyRetention() {
+    if (isDemo) {
+      setError('Cannot apply retention in demo mode');
+      return;
+    }
+
+    if (
+      !confirm(
+        'Apply retention policy? This will delete old backups per the retention rules (keep last 3 days, 1 from prev week, 1 from 2 weeks ago).'
+      )
+    )
+      return;
+
+    try {
+      setApplyingRetention(true);
+      setError(null);
+      const result = await api.applyBackupRetention();
+      setSuccess(result.data.message);
+      loadData();
+      setTimeout(() => setSuccess(null), 5000);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to apply retention');
+    } finally {
+      setApplyingRetention(false);
+    }
+  }
+
   function formatBytes(bytes: number): string {
     if (bytes === 0) return '0 B';
     const k = 1024;
@@ -219,6 +283,15 @@ export default function BackupsPage() {
     }
   }
 
+  function canRestore(backup: Backup): boolean {
+    return (
+      backup.status === 'completed' &&
+      backup.backupType === 'project' &&
+      backup.format === 'sql' &&
+      !!backup.projectId
+    );
+  }
+
   if (loading) {
     return (
       <div className="p-8">
@@ -243,9 +316,24 @@ export default function BackupsPage() {
         </div>
         <div className="flex items-center gap-2">
           {!isDemo && (
-            <Button variant="ghost" size="icon" onClick={loadData}>
-              <RefreshCw className="h-4 w-4" />
-            </Button>
+            <>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleApplyRetention}
+                disabled={applyingRetention}
+              >
+                {applyingRetention ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Sparkles className="h-4 w-4 mr-2" />
+                )}
+                Apply Retention
+              </Button>
+              <Button variant="ghost" size="icon" onClick={loadData}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </>
           )}
           <Button onClick={() => setCreateDialogOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
@@ -261,6 +349,23 @@ export default function BackupsPage() {
       {success && (
         <div className="mb-6 p-4 bg-emerald-500/10 text-emerald-500 rounded-lg">{success}</div>
       )}
+
+      {/* Retention Policy Info */}
+      <Card className="mb-6 border-blue-500/20 bg-blue-500/5">
+        <CardContent className="py-4">
+          <div className="flex items-start gap-3">
+            <Sparkles className="h-5 w-5 text-blue-500 mt-0.5" />
+            <div>
+              <p className="text-sm font-medium text-blue-500">Smart Retention Policy</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Automatic backups use smart retention: keep all from last 3 days, 1 backup from
+                previous week, 1 backup from 2 weeks ago. Older backups are automatically cleaned
+                up.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {backups.length === 0 ? (
         <Card>
@@ -305,6 +410,17 @@ export default function BackupsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
+                    {canRestore(backup) && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => openRestoreDialog(backup)}
+                        className="text-orange-500 border-orange-500/30 hover:bg-orange-500/10"
+                      >
+                        <RotateCcw className="h-4 w-4 mr-2" />
+                        Restore
+                      </Button>
+                    )}
                     {backup.status === 'completed' && (
                       <Button variant="ghost" size="sm" onClick={() => handleDownload(backup)}>
                         <Download className="h-4 w-4 mr-2" />
@@ -464,6 +580,81 @@ export default function BackupsPage() {
             >
               {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               Create Backup
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Restore Backup Dialog */}
+      <Dialog open={restoreDialogOpen} onOpenChange={setRestoreDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-orange-500" />
+              Restore Database
+            </DialogTitle>
+            <DialogDescription>
+              This will replace the current database contents with the backup data.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="p-4 bg-orange-500/10 border border-orange-500/20 rounded-lg">
+              <p className="text-sm text-orange-500 font-medium">Warning</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Restoring a backup will overwrite all current data in the project database. This
+                action cannot be undone. Make sure you have a recent backup of the current state if
+                needed.
+              </p>
+            </div>
+
+            {restoreBackup && (
+              <div className="space-y-2">
+                <p className="text-sm">
+                  <span className="text-muted-foreground">Project:</span>{' '}
+                  <span className="font-medium">
+                    {projects.find((p) => p.id === restoreBackup.projectId)?.name ||
+                      restoreBackup.projectId}
+                  </span>
+                </p>
+                <p className="text-sm">
+                  <span className="text-muted-foreground">Backup from:</span>{' '}
+                  <span className="font-medium">
+                    {new Date(restoreBackup.createdAt).toLocaleString()}
+                  </span>
+                </p>
+                <p className="text-sm">
+                  <span className="text-muted-foreground">Size:</span>{' '}
+                  <span className="font-medium">{formatBytes(restoreBackup.sizeBytes)}</span>
+                </p>
+              </div>
+            )}
+
+            {restoreWarnings.length > 0 && (
+              <div className="p-3 bg-yellow-500/10 border border-yellow-500/20 rounded-lg">
+                <p className="text-sm text-yellow-500 font-medium mb-2">
+                  Restore completed with warnings:
+                </p>
+                <ul className="text-xs text-muted-foreground space-y-1">
+                  {restoreWarnings.map((warning, i) => (
+                    <li key={i} className="font-mono">
+                      {warning}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setRestoreDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleRestore}
+              disabled={restoring}
+              className="bg-orange-500 hover:bg-orange-600"
+            >
+              {restoring && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Restore Database
             </Button>
           </DialogFooter>
         </DialogContent>
